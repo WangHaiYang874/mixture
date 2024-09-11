@@ -80,7 +80,7 @@ def transform(mat, x_var):
 
 
 
-def projection(moments, interval=None, wmat=None):
+def projection(moments, interval=None, wmat=None,verbose=False):
     """ project to a valid moment sequence on interval [a,b]
 
     Args:
@@ -115,6 +115,13 @@ def projection(moments, interval=None, wmat=None):
 
     # SDP for further projection
     variables = cvxpy.Variable(length) # variables [m_1,m_2,...,m_n]
+    
+    # giving variables a feasible initial starts
+    _nodes = np.linspace(interval[0],interval[1],length+2)[1:-1]
+    _whts = np.ones_like(_nodes)/len(_nodes)
+    _mmts = np.dot(np.power(_nodes[None,:],np.arange(1,length+1)[:,None]),_whts)
+    variables.value = _mmts
+    
     if wmat is None:
         wmat = np.identity(length)
     obj = cvxpy.Minimize(cvxpy.quad_form(moments-variables, wmat)) # objective function
@@ -144,13 +151,19 @@ def projection(moments, interval=None, wmat=None):
 
     prob = cvxpy.Problem(obj, constraints)
     try:
-        prob.solve(solver=cvxpy.CVXOPT)
+        prob.solve(solver=cvxpy.CVXOPT,verbose=verbose)
+        
+        if prob.status == cvxpy.INFEASIBLE:
+            raise ValueError('solver problem is infeasible. ')
+        
     except Exception as e:
         warnings.warn("CVXOPT failed. Using SCS solver..."+str(e))
-        prob.solve(solver=cvxpy.SCS)
-        # prob.solve()
-    # opt = prob.solve(solver=cvxpy.CVXOPT)
-
+        prob.solve(solver=cvxpy.SCS,verbose=verbose)
+        
+        if prob.status == cvxpy.INFEASIBLE:
+            raise ValueError('solver problem is infeasible. ')
+        
+        
     return np.asarray(variables.value).reshape(moments.shape)
 
 
@@ -209,7 +222,7 @@ def quadmom(moments, dettol=0, inf=1e10):
     return DiscreteRV(w=weights, x=atoms)
 
 
-def deconvolve_unknown_variance(moments):
+def deconvolve_unknown_variance(moments,verbose=False):
     """ Deconvolution with unknown sigma, using Lindsay's estimator.
     Fit moments with U+sigma Z. Estimate common sigma, and moments of U.
 

@@ -57,7 +57,7 @@ class DMM():
             self.online = [0, np.zeros((self.num_mom, 1)), np.zeros((self.num_mom, self.num_mom))]
 
 
-    def estimate(self, samples):
+    def estimate(self, samples,verbose=False):
         """
         estimate a model from given samples
         use two-step estimate:
@@ -77,15 +77,15 @@ class DMM():
 
         if self.sigma is None:
             m_raw = np.mean(m_raw, axis=1)
-            m_esti, var_esti = mm.deconvolve_unknown_variance(m_raw)
+            m_esti, var_esti = mm.deconvolve_unknown_variance(m_raw,verbose=verbose)
             dmom_rv = mm.quadmom(m_esti[:2*self.k-1])
             return ModelGM(w=dmom_rv.weights, x=dmom_rv.atoms, std=np.sqrt(var_esti))
         else:
             m_hermite = np.dot(self.transform[0], m_raw)+self.transform[1]
             m_decon = np.mean(m_hermite, axis=1)
-            dmom_rv = self.estimate_from_moments(m_decon) # preliminary estimate
+            dmom_rv = self.estimate_from_moments(m_decon,verbose=verbose) # preliminary estimate
             wmat = estimate_weight_matrix(m_hermite, dmom_rv)
-            dmom_rv = self.estimate_from_moments(m_decon, wmat) # second step estimate
+            dmom_rv = self.estimate_from_moments(m_decon, wmat,verbose=verbose) # second step estimate
             # print(np.linalg.inv(wmat))
             return ModelGM(w=dmom_rv.weights, x=dmom_rv.atoms, std=self.sigma)
 
@@ -175,7 +175,7 @@ class DMM():
         m_raw = np.mean(m_raw, axis=1).reshape((self.num_mom, 1))
         return ((np.dot(self.transform[0], m_raw)+self.transform[1])).reshape(self.num_mom)
 
-    def estimate_from_moments(self, moments, wmat=None):
+    def estimate_from_moments(self, moments, wmat=None,verbose=False):
         """
         estimate a discrete random variable from moments estimate
 
@@ -189,7 +189,7 @@ class DMM():
         Returns:
         an estimated latent distribtuion on at most k points
         """
-        m_proj = mm.projection(moments, self.interval, wmat)
+        m_proj = mm.projection(moments, self.interval, wmat, verbose=verbose)
         dmom_rv = mm.quadmom(m_proj, dettol=0)
         return dmom_rv
 
