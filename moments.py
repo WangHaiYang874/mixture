@@ -150,22 +150,44 @@ def projection(moments, interval=None, wmat=None,verbose=False):
                 constraints.append(h_mat[i, j] == variables[i+j-1])
 
     prob = cvxpy.Problem(obj, constraints)
-    try:
-        prob.solve(solver=cvxpy.CVXOPT,verbose=verbose)
+    
+    solvers = [cvxpy.CVXOPT, cvxpy.SCS, cvxpy.MOSEK]
+    solved = False
+    solvers_results = {solver:[] for solver in solvers}
+    
+    
+    for solver in solvers:
         
-        if prob.status == cvxpy.INFEASIBLE:
-            raise ValueError('solver problem is infeasible. ')
+        if solved:
+            break
         
-    except Exception as e:
-        warnings.warn("CVXOPT failed. Using SCS solver..."+str(e))
-        prob.solve(solver=cvxpy.SCS,verbose=verbose)
+        try: 
+            prob.solve(solver=solver,verbose=verbose)
+        except Exception as e:
+            print(f'**** {solver} error occurred: {e} ****')
+            solvers_results[solver].append(e)
+            
+        print('****'*10)
+        print(f'**** problem status: {solver} {prob.status}. ****')
         
-        if prob.status == cvxpy.INFEASIBLE:
-            raise ValueError('solver problem is infeasible. ')
+        solvers_results[solver].append(prob.status)
         
-        
-    return np.asarray(variables.value).reshape(moments.shape)
+        if prob.status == cvxpy.OPTIMAL:
+            solved = True
 
+        # match case is not available for python<3.10
+        # match prob.status:
+        #     case cvxpy.OPTIMAL:
+        #         solved = True
+        #     case _:
+        #         pass
+    if solved:
+        return np.asarray(variables.value).reshape(moments.shape)
+    else:
+        print('....')
+        msg = f'**** solvers failed. {solvers_results} ****'
+        # print(msg)
+        raise ValueError(msg)
 
 
 
